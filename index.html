@@ -1,0 +1,613 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>購物電商</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
+  <link href="https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    .bg-shopee-orange {
+      background-color: #EE4D2D;
+    }
+    .text-shopee-orange {
+      color: #EE4D2D;
+    }
+    .hover\:bg-shopee-orange-dark:hover {
+      background-color: #D43F21;
+    }
+    .spin-wheel {
+      transition: transform 3s ease-out;
+    }
+    .spin-wheel.spinning {
+      transform: rotate(1440deg);
+    }
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, Component } = React;
+
+    // Language context (fixed to Chinese)
+    const translations = {
+      title: "購物電商",
+      products: "商品列表",
+      details: "商品詳情",
+      addToCart: "加入購物車",
+      cart: "購物車",
+      checkout: "結帳",
+      price: "價格",
+      item: "商品",
+      total: "總計",
+      checkoutBtn: "確認結帳",
+      back: "返回",
+      searchPlaceholder: "搜尋商品...",
+      checkoutConfirm: "請確認您的訂單",
+      checkoutSuccess: "感謝您的購買！",
+      cartEmpty: "購物車是空的",
+      error: "發生錯誤，請稍後再試",
+      signIn: "簽到",
+      signInProgress: "每日簽到領購物幣",
+      tasks: "任務",
+      purchaseProduct: "完成首購商品",
+      inviteFriends: "邀請 1 位好友",
+      spinWheelTask: "挑戰轉盤抽到 50 購物幣",
+      shareLink: "分享連結",
+      badges: "徽章",
+      signInBadge: "連續簽到 5 天",
+      taskMasterBadge: "任務達人",
+      luckyDraw: "幸運抽獎",
+      spinWheel: "開始抽獎",
+      points: "購物幣",
+      usePoints: "使用購物幣 (1 點購物幣 = $1)",
+      finalPrice: "最終價格",
+      invalidPoints: "無效購物幣，請輸入有效數字",
+      insufficientPoints: "目前購物幣不足",
+      pointsUsed: "已使用 {0} 購物幣折抵",
+      shareMessage: "我看到一個好用的 app，分享給你一起來購物！",
+      copyText: "複製文字",
+    };
+
+    // Sample product data (dresses) with provided image URLs
+    const products = [
+      {
+        id: 1,
+        name: "優雅晚禮服",
+        price: 4999,
+        description: "經典黑色晚禮服，適合正式場合",
+        image: "https://i.imgur.com/TvBPokY.png",
+      },
+      {
+        id: 2,
+        name: "浪漫蕾絲禮服",
+        price: 3999,
+        description: "白色蕾絲設計，浪漫優雅",
+        image: "https://i.imgur.com/Xtz5tod.png",
+      },
+      {
+        id: 3,
+        name: "亮片派對禮服",
+        price: 5999,
+        description: "閃亮亮片，適合派對場合",
+        image: "https://i.imgur.com/8XXhINF.png",
+      },
+      {
+        id: 4,
+        name: "簡約婚禮服",
+        price: 7999,
+        description: "簡約白色婚禮服，純淨優雅",
+        image: "https://i.imgur.com/tyrC1N5.png",
+      },
+    ];
+
+    // Error Boundary Component
+    class ErrorBoundary extends Component {
+      state = { hasError: false };
+
+      static getDerivedStateFromError(error) {
+        return { hasError: true };
+      }
+
+      render() {
+        if (this.state.hasError) {
+          return <div className="p-4 text-red-500">{translations.error}</div>;
+        }
+        return this.props.children;
+      }
+    }
+
+    function App() {
+      const [cart, setCart] = useState([]);
+      const [currentPage, setCurrentPage] = useState('list');
+      const [selectedProduct, setSelectedProduct] = useState(null);
+      const [searchTerm, setSearchTerm] = useState('');
+      const [lastTotal, setLastTotal] = useState(0);
+      const [usedPoints, setUsedPoints] = useState(0);
+      const [points, setPoints] = useState(0);
+      const [signInDays, setSignInDays] = useState(0);
+      const [purchasedProducts, setPurchasedProducts] = useState(0);
+      const [invitedFriends, setInvitedFriends] = useState(0);
+      const [spins, setSpins] = useState(0);
+      const [badges, setBadges] = useState([]);
+      const [isSpinning, setIsSpinning] = useState(false);
+      const [spinResult, setSpinResult] = useState(null);
+      const [showInviteModal, setShowInviteModal] = useState(false);
+      const [showSpinModal, setShowSpinModal] = useState(false);
+      const [spinReward, setSpinReward] = useState(0);
+
+      // Calculate task progress
+      const taskProgress = (purchasedProducts >= 1 ? 1 : 0) + (invitedFriends >= 1 ? 1 : 0) + (spins >= 1 ? 1 : 0);
+
+      // Handle daily sign-in
+      const handleSignIn = () => {
+        if (signInDays < 5) {
+          const newSignInDays = signInDays + 1;
+          setSignInDays(newSignInDays);
+          setPoints(points + 10); // Reward 10 points for sign-in
+          if (newSignInDays === 5) {
+            setBadges([...badges, translations.signInBadge]);
+          }
+        }
+      };
+
+      // Handle invite friends
+      const handleInviteFriends = () => {
+        setShowInviteModal(true);
+      };
+
+      const handleCopyLink = () => {
+        const shareUrl = window.location.href;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          setInvitedFriends(1);
+          if (!badges.includes(translations.taskMasterBadge)) {
+            setBadges([...badges, translations.taskMasterBadge]);
+            setPoints(points + 50); // Reward 50 points for task completion
+          }
+          setShowInviteModal(false);
+          alert('連結已複製到剪貼簿！');
+        });
+      };
+
+      // Handle lucky draw
+      const handleSpin = () => {
+        if (signInDays === 0) {
+          alert(translations.insufficientPoints);
+          return;
+        }
+        setIsSpinning(true);
+        const rewards = [10, 10, 10, 10, 20, 20, 20, 20, 30, 30, 30, 30, 40, 40, 40, 40, 50, 50];
+        const randomIndex = Math.floor(Math.random() * rewards.length);
+        const reward = rewards[randomIndex];
+        setTimeout(() => {
+          setIsSpinning(false);
+          setSpinResult(reward);
+          setSpinReward(reward);
+          setPoints(points + reward);
+          if (reward === 50) {
+            setSpins(1);
+            if (!badges.includes(translations.taskMasterBadge)) {
+              setBadges([...badges, translations.taskMasterBadge]);
+              setPoints(points + reward + 50); // Reward 50 points for task completion
+            }
+          }
+          setShowSpinModal(true);
+        }, 3000);
+      };
+
+      // Other existing functions
+      const addToCart = (product) => {
+        setCart([...cart, product]);
+        setCurrentPage('cart');
+      };
+
+      const goToProductDetails = (product) => {
+        setSelectedProduct(product);
+        setCurrentPage('details');
+      };
+
+      const goToCart = () => {
+        setCurrentPage('cart');
+      };
+
+      const goToCheckout = () => {
+        const totalItems = cart.length;
+        setLastTotal(cart.reduce((sum, item) => sum + item.price, 0));
+        if (totalItems >= 1) {
+          setPurchasedProducts(1);
+          if (!badges.includes(translations.taskMasterBadge)) {
+            setBadges([...badges, translations.taskMasterBadge]);
+            setPoints(points + 50); // Reward 50 points for task completion
+          }
+        }
+        setCart([]);
+        setCurrentPage('checkout');
+      };
+
+      const confirmCheckout = () => {
+        setPoints(points - usedPoints); // Deduct used points
+        setUsedPoints(0);
+        setCurrentPage('list');
+      };
+
+      const goBack = () => {
+        setCurrentPage('list');
+        setSelectedProduct(null);
+      };
+
+      const handleSearch = (e) => {
+        setSearchTerm(e.target.value);
+      };
+
+      const filteredProducts = products.filter((product) =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+      return (
+        <ErrorBoundary>
+          <div className="min-h-screen bg-gray-100">
+            <header className="bg-shopee-orange text-white p-4 flex justify-between items-center">
+              <h1 className="text-xl font-bold">{translations.title}</h1>
+              <div className="flex items-center space-x-4">
+                <span className="text-sm">{translations.points}: {points}</span>
+                <input
+                  type="text"
+                  placeholder={translations.searchPlaceholder}
+                  value={searchTerm}
+                  onChange={handleSearch}
+                  className="px-3 py-1 rounded text-black"
+                />
+                <button
+                  onClick={goToCart}
+                  className="relative flex items-center"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
+                  {cart.length > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {cart.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </header>
+            <main className="p-4">
+              {currentPage === 'list' && (
+                <div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold">{translations.signInProgress}</h3>
+                    <div className="w-full bg-gray-200 rounded h-4">
+                      <div
+                        className="bg-shopee-orange h-4 rounded"
+                        style={{ width: `${(signInDays / 5) * 100}%` }}
+                      ></div>
+                    </div>
+                    <p>{signInDays}/5 天</p>
+                    <button
+                      onClick={handleSignIn}
+                      disabled={signInDays >= 5}
+                      className={`mt-2 bg-shopee-orange text-white px-4 py-2 rounded hover:bg-shopee-orange-dark ${
+                        signInDays >= 5 ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {translations.signIn}
+                    </button>
+                  </div>
+                  <div className="mb-4">
+                    <div className="w-full bg-gray-200 rounded h-4">
+                      <div
+                        className="bg-shopee-orange h-4 rounded"
+                        style={{ width: `${(taskProgress / 3) * 100}%` }}
+                      ></div>
+                    </div>
+                    <p>任務進度: {taskProgress}/3</p>
+                    <div className="mb-2">
+                      <p><span className="font-semibold">任務 1: </span>{translations.purchaseProduct}: {purchasedProducts}/1</p>
+                    </div>
+                    <div className="mb-2 flex justify-between items-center">
+                      <p><span className="font-semibold">任務 2: </span>{translations.inviteFriends}: {invitedFriends}/1</p>
+                      <button
+                        onClick={handleInviteFriends}
+                        className="bg-shopee-orange text-white px-4 py-2 rounded hover:bg-shopee-orange-dark"
+                      >
+                        {translations.shareLink}
+                      </button>
+                    </div>
+                    <div className="mb-2">
+                      <p><span className="font-semibold">任務 3: </span>{translations.spinWheelTask}: {spins}/1</p>
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold">{translations.badges}</h3>
+                    {badges.length === 0 ? (
+                      <p>尚未獲得徽章</p>
+                    ) : (
+                      <ul>
+                        {badges.map((badge, index) => (
+                          <li key={index} className="text-sm">🏅 {badge}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold">{translations.luckyDraw}</h3>
+                    <div className="relative w-40 h-40 mx-auto">
+                      <svg
+                        className={`w-full h-full spin-wheel ${isSpinning ? 'spinning' : ''}`}
+                        viewBox="0 0 100 100"
+                      >
+                        <circle cx="50" cy="50" r="50" fill="#EE4D2D" />
+                        <circle cx="50" cy="50" r="40" fill="#fff" />
+                        <text x="50" y="55" textAnchor="middle" fill="#000" fontSize="12">
+                          {spinResult || '轉盤'}
+                        </text>
+                        <polygon points="50,10 55,20 45,20" fill="#000" />
+                      </svg>
+                    </div>
+                    <button
+                      onClick={handleSpin}
+                      disabled={isSpinning || signInDays === 0}
+                      className={`mt-2 bg-shopee-orange text-white px-4 py-2 rounded hover:bg-shopee-orange-dark ${
+                        isSpinning || signInDays === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {translations.spinWheel}
+                    </button>
+                  </div>
+                  {filteredProducts.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">搜尋結果</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filteredProducts.map((product) => (
+                          <div
+                            key={product.id}
+                            className="bg-white p-4 rounded shadow hover:shadow-lg cursor-pointer"
+                            onClick={() => goToProductDetails(product)}
+                          >
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="w-full h-40 object-contain rounded mb-2"
+                            />
+                            <h3 className="text-lg font-medium">{product.name}</h3>
+                            <p>{translations.price}: ${product.price}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {currentPage === 'details' && selectedProduct && (
+                <div>
+                  <h2 className="text-2xl font-semibold mb-4">{translations.details}</h2>
+                  <div className="bg-white p-4 rounded shadow">
+                    <img
+                      src={selectedProduct.image}
+                      alt={selectedProduct.name}
+                      className="w-full h-64 object-contain rounded mb-4"
+                    />
+                    <h3 className="text-xl font-medium">{selectedProduct.name}</h3>
+                    <p>{translations.price}: ${selectedProduct.price}</p>
+                    <p>{selectedProduct.description}</p>
+                    <button
+                      onClick={() => addToCart(selectedProduct)}
+                      className="mt-4 bg-shopee-orange text-white px-4 py-2 rounded hover:bg-shopee-orange-dark"
+                    >
+                      {translations.addToCart}
+                    </button>
+                    <button
+                      onClick={goBack}
+                      className="mt-4 ml-2 bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                    >
+                      {translations.back}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {currentPage === 'cart' && (
+                <div>
+                  <h2 className="text-2xl font-semibold mb-4">{translations.cart}</h2>
+                  {cart.length === 0 ? (
+                    <div>
+                      <p>{translations.cartEmpty}</p>
+                      <button
+                        onClick={goBack}
+                        className="mt-4 bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                      >
+                        {translations.back}
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-lg mb-4">{translations.checkoutConfirm}</p>
+                      {cart.map((item, index) => (
+                        <div key={index} className="bg-white p-4 mb-2 rounded shadow">
+                          <p>{translations.item}: {item.name}</p>
+                          <p>{translations.price}: ${item.price}</p>
+                        </div>
+                      ))}
+                      <p className="text-lg font-semibold">
+                        {translations.total}: ${cart.reduce((sum, item) => sum + item.price, 0)}
+                      </p>
+                      <button
+                        onClick={goToCheckout}
+                        className="mt-4 bg-shopee-orange text-white px-4 py-2 rounded hover:bg-shopee-orange-dark"
+                      >
+                        {translations.checkoutBtn}
+                      </button>
+                      <button
+                        onClick={goBack}
+                        className="mt-4 ml-2 bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                      >
+                        {translations.back}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {currentPage === 'checkout' && (
+                <div>
+                  <h2 className="text-2xl font-semibold mb-4">{translations.checkout}</h2>
+                  <div className="bg-white p-4 rounded shadow">
+                    <p>{translations.checkoutSuccess}</p>
+                    <p>{translations.total}: ${lastTotal}</p>
+                    <div className="mt-4">
+                      <label className="block mb-2">{translations.usePoints}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={Math.min(points, lastTotal)}
+                        placeholder="輸入折抵購物幣"
+                        onChange={(e) => {
+                          const inputPoints = parseInt(e.target.value) || 0;
+                          if (inputPoints < 0) {
+                            alert(translations.invalidPoints);
+                            e.target.value = '';
+                            setUsedPoints(0);
+                          } else {
+                            setUsedPoints(inputPoints);
+                          }
+                        }}
+                        className="px-3 py-1 rounded text-black border"
+                      />
+                      {usedPoints > points && (
+                        <p className="text-red-500 text-sm mt-2">{translations.insufficientPoints}</p>
+                      )}
+                    </div>
+                    <p className="text-lg font-semibold mt-2">
+                      {translations.finalPrice}: ${Math.max(0, lastTotal - usedPoints)}
+                    </p>
+                    <button
+                      onClick={confirmCheckout}
+                      disabled={usedPoints > points}
+                      className={`mt-4 bg-shopee-orange text-white px-4 py-2 rounded hover:bg-shopee-orange-dark ${
+                        usedPoints > points ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {translations.checkoutBtn}
+                    </button>
+                    <button
+                      onClick={goBack}
+                      className="mt-4 ml-2 bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                    >
+                      {translations.back}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {showInviteModal && (
+                <div className="modal">
+                  <div className="modal-content">
+                    <p className="mb-4">{translations.shareMessage}</p>
+                    <button
+                      onClick={handleCopyLink}
+                      className="bg-shopee-orange text-white px-4 py-2 rounded hover:bg-shopee-orange-dark"
+                    >
+                      {translations.copyText}
+                    </button>
+                    <button
+                      onClick={() => setShowInviteModal(false)}
+                      className="mt-2 ml-2 bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                    >
+                      {translations.back}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {showSpinModal && (
+                <div className="modal">
+                  <div className="modal-content">
+                    <p className="mb-4">你抽到 {spinReward} 購物幣！</p>
+                    <button
+                      onClick={() => setShowSpinModal(false)}
+                      className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                    >
+                      {translations.back}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </main>
+          </div>
+        </ErrorBoundary>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
